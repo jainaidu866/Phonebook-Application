@@ -5,13 +5,14 @@
         <h1>Phonebook App</h1>
         <p>Manage your professional contacts efficiently.</p>
       </header>
-      
+
       <section class="form-section">
         <div class="input-group">
-          <input v-model="form.name" placeholder="Contact Name" required />
-          <input v-model="form.phone_number" placeholder="Phone Number" required />
+          <input v-model="form.name" placeholder="Name" required />
+          <input v-model="form.phone_number" placeholder="Phone (+1234567890)" required />
           <button @click="submitContact" class="btn-primary">Add Contact</button>
         </div>
+        <p v-if="formError" class="error-msg">{{ formError }}</p>
       </section>
 
       <section class="list-section">
@@ -20,7 +21,7 @@
             <tr>
               <th>Name</th>
               <th>Phone</th>
-              <th class="text-center">Action</th>
+              <th class="text-center">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -28,15 +29,37 @@
               <td class="font-bold">{{ contact.name }}</td>
               <td>{{ contact.phone_number }}</td>
               <td class="text-center">
+                <button @click="openEdit(contact)" class="btn-edit">Edit</button>
                 <button @click="deleteContact(contact.id)" class="btn-danger">Delete</button>
               </td>
             </tr>
             <tr v-if="contacts.length === 0">
-              <td colspan="3" class="text-center muted">No contacts found. Add one above!</td>
+              <td colspan="3" class="text-center muted">No contacts found.</td>
             </tr>
           </tbody>
         </table>
       </section>
+
+      <div v-if="editModal" class="modal-overlay">
+        <div class="modal">
+          <h2>Edit Contact</h2>
+          <div class="modal-form">
+            <label>Name</label>
+            <input v-model="editForm.name" />
+            <label>Phone Number</label>
+            <input v-model="editForm.phone_number" />
+            <label>Email</label>
+            <input v-model="editForm.email" />
+            <label>Address</label>
+            <input v-model="editForm.address" />
+          </div>
+          <p v-if="editError" class="error-msg">{{ editError }}</p>
+          <div class="modal-actions">
+            <button @click="updateContact" class="btn-primary">Save Changes</button>
+            <button @click="closeEdit" class="btn-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -47,24 +70,56 @@ import axios from 'axios'
 
 const contacts = ref([])
 const form = ref({ name: '', phone_number: '' })
+const formError = ref('')
+const editModal = ref(false)
+const editForm = ref({})
+const editError = ref('')
+const editId = ref(null)
 
-// Get all contacts from the backend
+const isValidPhone = (phone) => /^\+?[1-9]\d{6,14}$/.test(phone)
+
 const getContacts = async () => {
   const response = await axios.get('http://localhost:8000/contacts')
   contacts.value = response.data
 }
 
-// Send a new contact to the backend
 const submitContact = async () => {
-  if (!form.value.name || !form.value.phone_number) return alert("Please fill in both fields.")
-  await axios.post('http://localhost:8000/contacts', form.value)
-  form.value = { name: '', phone_number: '' }
+  formError.value = ''
+  if (!form.value.name || !form.value.phone_number) {
+    formError.value = 'Required fields missing.'
+    return
+  }
+  if (!isValidPhone(form.value.phone_number)) {
+    formError.value = 'Use format: +1234567890'
+    return
+  }
+  try {
+    await axios.post('http://localhost:8000/contacts', form.value)
+    form.value = { name: '', phone_number: '' }
+    getContacts()
+  } catch (e) { formError.value = "Error saving contact." }
+}
+
+const openEdit = (contact) => {
+  editId.value = contact.id
+  editForm.value = { ...contact }
+  editModal.value = true
+}
+
+const closeEdit = () => { editModal.value = false }
+
+const updateContact = async () => {
+  if (!isValidPhone(editForm.value.phone_number)) {
+    editError.value = 'Invalid phone format.'
+    return
+  }
+  await axios.put(`http://localhost:8000/contacts/${editId.value}`, editForm.value)
+  editModal.value = false
   getContacts()
 }
 
-// Delete a contact
 const deleteContact = async (id) => {
-  if(confirm("Are you sure you want to delete this contact?")) {
+  if(confirm("Delete this contact?")) {
     await axios.delete(`http://localhost:8000/contacts/${id}`)
     getContacts()
   }
@@ -74,119 +129,25 @@ onMounted(getContacts)
 </script>
 
 <style scoped>
-/* Professional Modern CSS */
-:global(body) {
-  background-color: #f0f2f5;
-  margin: 0;
-  color: #1c1e21;
-}
-
-.app-container {
-  display: flex;
-  justify-content: center;
-  padding: 50px 20px;
-}
-
-.card {
-  background: white;
-  width: 100%;
-  max-width: 800px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 30px;
-}
-
-.header {
-  border-bottom: 2px solid #f0f2f5;
-  margin-bottom: 25px;
-  padding-bottom: 10px;
-}
-
-.header h1 {
-  margin: 0;
-  color: #007bff;
-  font-size: 1.8rem;
-}
-
-.header p {
-  color: #65676b;
-  margin: 5px 0 0 0;
-}
-
-.form-section {
-  margin-bottom: 30px;
-}
-
-.input-group {
-  display: flex;
-  gap: 10px;
-}
-
-input {
-  flex: 1;
-  padding: 12px 15px;
-  border: 1px solid #dddfe2;
-  border-radius: 6px;
-  font-size: 14px;
-  transition: border 0.2s;
-}
-
-input:focus {
-  outline: none;
-  border-color: #007bff;
-}
-
-.btn-primary {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  padding: 0 25px;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.btn-primary:hover {
-  background-color: #0056b3;
-}
-
-.btn-danger {
-  background-color: #ff4d4f;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.btn-danger:hover {
-  background-color: #d9363e;
-}
-
-.styled-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.styled-table th {
-  text-align: left;
-  background-color: #f8f9fa;
-  padding: 12px;
-  color: #4b4f56;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.styled-table td {
-  padding: 15px 12px;
-  border-bottom: 1px solid #f0f2f5;
-  font-size: 15px;
-}
-
-.font-bold { font-weight: 600; }
+/* Same professional styles as before, adding Edit button and Modal styles */
+:global(body) { background-color: #f0f2f5; margin: 0; color: #1c1e21; }
+.app-container { display: flex; justify-content: center; padding: 50px 20px; }
+.card { background: white; width: 100%; max-width: 800px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 30px; }
+.header { border-bottom: 2px solid #f0f2f5; margin-bottom: 25px; padding-bottom: 10px; }
+.header h1 { margin: 0; color: #007bff; font-size: 1.8rem; }
+.input-group { display: flex; gap: 10px; }
+input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 6px; }
+.btn-primary { background: #007bff; color: white; border: none; padding: 0 20px; border-radius: 6px; cursor: pointer; }
+.btn-edit { background: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-right: 5px; }
+.btn-danger { background: #ff4d4f; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+.styled-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+.styled-table th, .styled-table td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
 .text-center { text-align: center; }
-.muted { color: #8e8e8e; }
+.error-msg { color: #ff4d4f; font-size: 12px; margin-top: 5px; }
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: white; padding: 30px; border-radius: 12px; width: 400px; }
+.modal-form { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+.modal-form label { font-size: 12px; font-weight: bold; }
+.modal-actions { margin-top: 20px; display: flex; gap: 10px; }
+.btn-cancel { background: #6c757d; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; }
 </style>
