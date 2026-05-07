@@ -1,9 +1,10 @@
-📱 Professional Phonebook Application
+📱 **Professional Phonebook Application**
 A robust, full-stack contact management system engineered for high performance and reliability. This project demonstrates a modern microservices architecture, utilizing containerization to ensure seamless deployment and data persistence .  
 
 
 
-🛠 Tech Stack
+
+🛠 **Tech Stack**
 The application is built using a modern, scalable technology stack:
 
 Frontend: Vue 3 (Composition API) with Vite for a fast, reactive user interface.  
@@ -18,7 +19,8 @@ Orchestration: Docker & Docker Compose for full-system containerization and netw
 
 
 
-🚀 Deployment and Installation
+
+🚀 **Deployment and Installation**
 Follow these steps to deploy the application in any environment:
 
 1. Prerequisites
@@ -32,7 +34,9 @@ docker-compose up --build
 This command automatically builds the images, configures the internal network, and initializes the database schema .  
 
 
-💻 How to Use the Application
+
+
+💻 **How to Use the Application**
 Once the containers are active, you can interact with the system through the following access points:
 
 Accessing the Web Interface
@@ -43,19 +47,26 @@ Viewing Contacts: The contact list automatically synchronizes with the database 
 Managing Data: Each record includes a "Delete" option to permanently remove the entry from the system.  
 
 
-Interactive API Documentation
+
+
+**Interactive API Documentation**
 Navigate to http://localhost:8000/docs to access the Swagger UI.
 
 This provides a live environment to test all backend endpoints (GET, POST, DELETE) directly against the database .  
 
 
-📁 Project Architecture
+
+
+📁 **Project Architecture**
 The repository is structured to maintain a clear separation of concerns:
 /backend: Contains the FastAPI logic, SQLAlchemy ORM models, and database connection strings.  
 /frontend: Contains the Vue 3 source code, including the reactive App.vue component and Vite configuration.  
 docker-compose.yml: The central configuration file that manages service dependencies and environment variables .  
 
-🛡️ Key Features
+
+
+
+🛡️ **Key Features**
 
 Data Persistence: Contacts remain securely stored in the PostgreSQL volume even after the application is shut down.  
 
