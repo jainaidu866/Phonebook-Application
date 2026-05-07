@@ -19,6 +19,7 @@ This command automatically builds the images, configures the internal network, a
 
 💻 **How to Use the Application**
 Once the containers are active, you can interact with the system through the following access points:Accessing the Web InterfaceNavigate to **http://localhost:8080** in your web browser.
+
 **Adding Contacts**: Use the input header to enter a name and phone number. Click "Add Contact" to commit the entry to the PostgreSQL database.  
 **Viewing Contacts**: The contact list automatically synchronizes with the database and displays all stored records in the data table.  Editing/Updating: Click the "Edit" button to modify existing contact details via a secure modal.  
 **Managing Data**: Each record includes a "Delete" option to permanently remove the entry from the system.  Interactive API DocumentationNavigate to http://localhost:8000/docs to access the Swagger UI. This provides a live environment to test all backend endpoints (GET, POST, PUT, DELETE) directly against the database.  
