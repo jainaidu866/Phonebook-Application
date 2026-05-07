@@ -2,6 +2,11 @@
 A robust, full-stack contact management system engineered for high performance and reliability. This project demonstrates a modern microservices architecture, utilizing containerization to ensure seamless deployment and data persistence .  
 
 
+## 🎥 Video Demonstration (6-Minute Technical Walkthrough)
+> **[Watch the full video walkthrough here](https://youtu.be/y703RQKXtf4?si=mZYoKs6Z3rpviJSF)** — 
+*Includes UI demo, frontend logic, backend API explanation, and Docker setup.*
+
+
 🖼️ **User Interface**
 The modern, responsive interface allows for seamless contact management across all devices.
 [Final UserInterface Screenshot](<Phonebook UI.jpeg>)
