@@ -1,11 +1,13 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel, validator
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 import re
 import os
 
@@ -15,21 +17,16 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# ── Model ──────────────────────────────────────────────────────────────────────
-
 class Contact(Base):
     __tablename__ = "contacts"
-
-    id         = Column(Integer, primary_key=True, index=True)
-    name       = Column(String(255), nullable=False)
+    id           = Column(Integer, primary_key=True, index=True)
+    name         = Column(String(255), nullable=False)
     phone_number = Column(String(50), unique=True, nullable=False)
-    email      = Column(String(255), unique=True, nullable=True)
-    address    = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    email        = Column(String(255), unique=True, nullable=True)
+    address      = Column(Text, nullable=True)
+    created_at   = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
-
-# ── Schemas ────────────────────────────────────────────────────────────────────
 
 class ContactCreate(BaseModel):
     name: str
@@ -82,7 +79,9 @@ class ContactOut(BaseModel):
     class Config:
         orm_mode = True
 
-# ── App ────────────────────────────────────────────────────────────────────────
+class ContactsPage(BaseModel):
+    total: int
+    items: List[ContactOut]
 
 app = FastAPI(title="Phonebook API", version="1.0.0")
 
@@ -101,17 +100,22 @@ def get_db():
     finally:
         db.close()
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
-
-@app.get("/contacts", response_model=list[ContactOut])
-def get_contacts(search: Optional[str] = None, db: Session = Depends(get_db)):
+@app.get("/contacts", response_model=ContactsPage)
+def get_contacts(
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 9,
+    db: Session = Depends(get_db)
+):
     query = db.query(Contact)
     if search:
         query = query.filter(
             Contact.name.ilike(f"%{search}%") |
             Contact.phone_number.ilike(f"%{search}%")
         )
-    return query.order_by(Contact.created_at.desc()).all()
+    total = query.count()
+    items = query.order_by(Contact.created_at.desc()).offset(skip).limit(limit).all()
+    return { "total": total, "items": items }
 
 @app.post("/contacts", response_model=ContactOut, status_code=201)
 def create_contact(contact: ContactCreate, db: Session = Depends(get_db)):
@@ -157,3 +161,12 @@ def delete_contact(id: int, db: Session = Depends(get_db)):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+# Serve frontend — must be LAST
+static_path = os.path.join(os.path.dirname(__file__), "dist")
+if os.path.exists(static_path):
+    app.mount("/assets", StaticFiles(directory=os.path.join(static_path, "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    def serve_frontend(full_path: str):
+        return FileResponse(os.path.join(static_path, "index.html"))

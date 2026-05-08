@@ -22,12 +22,12 @@
           type="text"
           placeholder="Search by name or phone…"
           class="search-input"
-          @input="fetchContacts"
+          @input="onSearch"
         />
         <button v-if="search" class="clear-btn" @click="clearSearch">✕</button>
       </div>
       <p class="result-count">
-        {{ contacts.length }} contact{{ contacts.length !== 1 ? 's' : '' }}
+        {{ totalContacts }} contact{{ totalContacts !== 1 ? 's' : '' }}
         <span v-if="search"> matching "<em>{{ search }}</em>"</span>
       </p>
     </div>
@@ -66,6 +66,42 @@
           </div>
         </div>
       </div>
+
+      <!-- Pagination -->
+      <div v-if="totalPages > 1" class="pagination">
+        <button
+          class="page-btn"
+          :disabled="currentPage === 1"
+          @click="goToPage(1)"
+        >«</button>
+        <button
+          class="page-btn"
+          :disabled="currentPage === 1"
+          @click="goToPage(currentPage - 1)"
+        >‹</button>
+
+        <button
+          v-for="page in visiblePages"
+          :key="page"
+          class="page-btn"
+          :class="{ active: page === currentPage, dots: page === '...' }"
+          :disabled="page === '...'"
+          @click="page !== '...' && goToPage(page)"
+        >{{ page }}</button>
+
+        <button
+          class="page-btn"
+          :disabled="currentPage === totalPages"
+          @click="goToPage(currentPage + 1)"
+        >›</button>
+        <button
+          class="page-btn"
+          :disabled="currentPage === totalPages"
+          @click="goToPage(totalPages)"
+        >»</button>
+
+        <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
+      </div>
     </main>
 
     <!-- Modal -->
@@ -76,7 +112,6 @@
             <h2>{{ modal.mode === 'create' ? 'New Contact' : 'Edit Contact' }}</h2>
             <button class="close-btn" @click="closeModal">✕</button>
           </div>
-
           <div class="modal-body">
             <div class="form-group">
               <label>Name <span class="required">*</span></label>
@@ -98,7 +133,6 @@
               <textarea v-model="form.address" placeholder="Street, City, State" rows="2"></textarea>
             </div>
           </div>
-
           <div class="modal-footer">
             <button class="btn btn-ghost" @click="closeModal">Cancel</button>
             <button class="btn btn-primary" @click="submitForm" :disabled="submitting">
@@ -131,49 +165,84 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import axios from 'axios'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-const contacts = ref([])
-const search   = ref('')
-const loading  = ref(false)
-const submitting = ref(false)
-const deleteTarget = ref(null)
+const contacts      = ref([])
+const totalContacts = ref(0)
+const search        = ref('')
+const loading       = ref(false)
+const submitting    = ref(false)
+const deleteTarget  = ref(null)
 
-const modal = reactive({ show: false, mode: 'create', id: null })
-const form  = reactive({ name: '', phone_number: '', email: '', address: '' })
-const errors = reactive({ name: '', phone_number: '', email: '' })
-const toast  = reactive({ show: false, message: '', type: 'success' })
+// ── Pagination ────────────────────────────────────────────────
+const currentPage = ref(1)
+const pageSize    = ref(9)  // 9 cards per page fits the 3-column grid nicely
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+const totalPages = computed(() => Math.ceil(totalContacts.value / pageSize.value))
 
+const visiblePages = computed(() => {
+  const pages = []
+  const total = totalPages.value
+  const cur   = currentPage.value
+
+  if (total <= 7) {
+    for (let i = 1; i <= total; i++) pages.push(i)
+  } else {
+    pages.push(1)
+    if (cur > 3) pages.push('...')
+    for (let i = Math.max(2, cur - 1); i <= Math.min(total - 1, cur + 1); i++) {
+      pages.push(i)
+    }
+    if (cur < total - 2) pages.push('...')
+    pages.push(total)
+  }
+  return pages
+})
+
+function goToPage(page) {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+  fetchContacts()
+}
+
+// ── Helpers ───────────────────────────────────────────────────
 function initials(name) {
   return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
 }
 
 const COLORS = ['#4f7cff','#ff6b6b','#f7b731','#26de81','#fd9644','#a55eea','#2bcbba','#fc5c65']
 function avatarColor(name) {
-  const idx = name.charCodeAt(0) % COLORS.length
-  return COLORS[idx]
+  return COLORS[name.charCodeAt(0) % COLORS.length]
 }
 
 function showToast(message, type = 'success') {
   toast.message = message
-  toast.type = type
-  toast.show = true
+  toast.type    = type
+  toast.show    = true
   setTimeout(() => { toast.show = false }, 3000)
 }
 
-// ── Data ─────────────────────────────────────────────────────────────────────
-
+// ── Data ──────────────────────────────────────────────────────
 async function fetchContacts() {
   loading.value = true
   try {
-    const params = search.value ? { search: search.value } : {}
-    const res = await axios.get(`${API}/contacts`, { params })
-    contacts.value = res.data
+    const params = {
+      skip:  (currentPage.value - 1) * pageSize.value,
+      limit: pageSize.value,
+    }
+    if (search.value) params.search = search.value
+
+    const res = await axios.get(`${API}/contacts`, {
+      params,
+      headers: { 'ngrok-skip-browser-warning': 'true' }
+    })
+
+    // Backend returns { total, items }
+    contacts.value      = res.data.items
+    totalContacts.value = res.data.total
   } catch {
     showToast('Failed to load contacts', 'error')
   } finally {
@@ -181,41 +250,43 @@ async function fetchContacts() {
   }
 }
 
-function clearSearch() {
-  search.value = ''
+function onSearch() {
+  currentPage.value = 1
   fetchContacts()
 }
 
-// ── Modal ─────────────────────────────────────────────────────────────────────
+function clearSearch() {
+  search.value      = ''
+  currentPage.value = 1
+  fetchContacts()
+}
+
+// ── Modal ─────────────────────────────────────────────────────
+const modal = reactive({ show: false, mode: 'create', id: null })
+const form  = reactive({ name: '', phone_number: '', email: '', address: '' })
+const errors = reactive({ name: '', phone_number: '', email: '' })
+const toast  = reactive({ show: false, message: '', type: 'success' })
 
 function openModal(mode, contact = null) {
   modal.mode = mode
   modal.show = true
   resetErrors()
   if (mode === 'edit' && contact) {
-    modal.id = contact.id
-    form.name = contact.name
+    modal.id          = contact.id
+    form.name         = contact.name
     form.phone_number = contact.phone_number
-    form.email = contact.email || ''
-    form.address = contact.address || ''
+    form.email        = contact.email || ''
+    form.address      = contact.address || ''
   } else {
     modal.id = null
     Object.assign(form, { name: '', phone_number: '', email: '', address: '' })
   }
 }
 
-function closeModal() {
-  modal.show = false
-}
+function closeModal() { modal.show = false }
+function resetErrors() { errors.name = ''; errors.phone_number = ''; errors.email = '' }
 
-function resetErrors() {
-  errors.name = ''
-  errors.phone_number = ''
-  errors.email = ''
-}
-
-// ── Validation ────────────────────────────────────────────────────────────────
-
+// ── Validation ────────────────────────────────────────────────
 function validate() {
   resetErrors()
   let valid = true
@@ -231,23 +302,26 @@ function validate() {
   return valid
 }
 
-// ── CRUD ──────────────────────────────────────────────────────────────────────
-
+// ── CRUD ──────────────────────────────────────────────────────
 async function submitForm() {
   if (!validate()) return
   submitting.value = true
   const payload = {
-    name: form.name.trim(),
+    name:         form.name.trim(),
     phone_number: form.phone_number.trim(),
-    email: form.email.trim() || null,
-    address: form.address.trim() || null,
+    email:        form.email.trim() || null,
+    address:      form.address.trim() || null,
   }
   try {
     if (modal.mode === 'create') {
-      await axios.post(`${API}/contacts`, payload)
+      await axios.post(`${API}/contacts`, payload, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      })
       showToast('Contact added!')
     } else {
-      await axios.put(`${API}/contacts/${modal.id}`, payload)
+      await axios.put(`${API}/contacts/${modal.id}`, payload, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      })
       showToast('Contact updated!')
     }
     closeModal()
@@ -262,16 +336,19 @@ async function submitForm() {
   }
 }
 
-function confirmDelete(contact) {
-  deleteTarget.value = contact
-}
+function confirmDelete(contact) { deleteTarget.value = contact }
 
 async function deleteContact() {
   submitting.value = true
   try {
-    await axios.delete(`${API}/contacts/${deleteTarget.value.id}`)
+    await axios.delete(`${API}/contacts/${deleteTarget.value.id}`, {
+      headers: { 'ngrok-skip-browser-warning': 'true' }
+    })
     showToast('Contact deleted')
     deleteTarget.value = null
+    if (contacts.value.length === 1 && currentPage.value > 1) {
+      currentPage.value--
+    }
     fetchContacts()
   } catch {
     showToast('Failed to delete contact', 'error')
@@ -302,257 +379,93 @@ onMounted(fetchContacts)
   --shadow:   0 2px 12px rgba(0,0,0,0.07);
 }
 
-body {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-}
+body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-/* ── Header ────────────────────────────────────────────────── */
-.header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-.header-inner {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 16px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
+.header { background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+.header-inner { max-width: 1100px; margin: 0 auto; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
 .logo { display: flex; align-items: center; gap: 10px; }
 .logo-icon { font-size: 26px; }
 .logo-text { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--primary); letter-spacing: -0.5px; }
 
-/* ── Buttons ───────────────────────────────────────────────── */
-.btn {
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  padding: 10px 20px;
-  transition: background 0.15s, opacity 0.15s, transform 0.1s;
-}
+.btn { border: none; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 600; padding: 10px 20px; transition: background 0.15s, opacity 0.15s, transform 0.1s; }
 .btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-primary { background: var(--primary); color: #fff; display: flex; align-items: center; gap: 6px; }
 .btn-primary:hover:not(:disabled) { background: var(--primary-h); }
-.btn-ghost  { background: var(--bg); color: var(--text); }
+.btn-ghost { background: var(--bg); color: var(--text); }
 .btn-ghost:hover { background: var(--border); }
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-danger:hover:not(:disabled) { background: #dc2626; }
 .btn-icon { font-size: 18px; line-height: 1; }
 
-/* ── Search ────────────────────────────────────────────────── */
-.search-bar-wrap {
-  max-width: 1100px;
-  margin: 28px auto 0;
-  padding: 0 24px;
-}
-.search-bar {
-  display: flex;
-  align-items: center;
-  background: var(--surface);
-  border: 1.5px solid var(--border);
-  border-radius: 12px;
-  padding: 0 14px;
-  gap: 10px;
-  transition: border-color 0.2s;
-}
+.search-bar-wrap { max-width: 1100px; margin: 28px auto 0; padding: 0 24px; }
+.search-bar { display: flex; align-items: center; background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 0 14px; gap: 10px; transition: border-color 0.2s; }
 .search-bar:focus-within { border-color: var(--primary); }
 .search-icon { font-size: 17px; color: var(--muted); }
-.search-input {
-  flex: 1;
-  border: none;
-  outline: none;
-  font-family: inherit;
-  font-size: 15px;
-  padding: 13px 0;
-  background: transparent;
-  color: var(--text);
-}
+.search-input { flex: 1; border: none; outline: none; font-family: inherit; font-size: 15px; padding: 13px 0; background: transparent; color: var(--text); }
 .clear-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 4px; }
 .result-count { margin-top: 10px; font-size: 13px; color: var(--muted); }
 .result-count em { color: var(--primary); font-style: normal; font-weight: 600; }
 
-/* ── Main Grid ─────────────────────────────────────────────── */
-.main {
-  max-width: 1100px;
-  margin: 24px auto 60px;
-  padding: 0 24px;
-}
+.main { max-width: 1100px; margin: 24px auto 60px; padding: 0 24px; }
+.contact-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 
-.contact-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-
-/* ── Contact Card ──────────────────────────────────────────── */
-.contact-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  transition: box-shadow 0.2s, transform 0.2s;
-}
+.contact-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: flex; gap: 16px; align-items: flex-start; transition: box-shadow 0.2s, transform 0.2s; }
 .contact-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
-
-.contact-avatar {
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 16px;
-  color: #fff;
-  flex-shrink: 0;
-}
-
+.contact-avatar { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: #fff; flex-shrink: 0; }
 .contact-info { flex: 1; min-width: 0; }
 .contact-name { font-size: 15px; font-weight: 700; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.contact-phone, .contact-email, .contact-address {
-  font-size: 13px;
-  color: var(--muted);
-  margin-top: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+.contact-phone, .contact-email, .contact-address { font-size: 13px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .contact-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
-.action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  cursor: pointer;
-  font-size: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s;
-}
+.action-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
 .edit-btn:hover { background: #e0e7ff; }
 .del-btn:hover  { background: #fee2e2; }
 
-/* ── Empty / Loading ───────────────────────────────────────── */
-.empty-state {
-  text-align: center;
-  padding: 80px 0;
-  color: var(--muted);
-}
+/* ── Pagination ─────────────────────────────────────────────── */
+.pagination { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 32px; flex-wrap: wrap; }
+.page-btn { min-width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; padding: 0 8px; }
+.page-btn:hover:not(:disabled):not(.dots) { background: #e0e7ff; border-color: var(--primary); color: var(--primary); }
+.page-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.page-btn.dots { border: none; background: transparent; cursor: default; }
+.page-info { font-size: 13px; color: var(--muted); margin-left: 8px; }
+
+.empty-state { text-align: center; padding: 80px 0; color: var(--muted); }
 .empty-icon { font-size: 48px; display: block; margin-bottom: 12px; }
-.spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid var(--border);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  margin: 0 auto 16px;
-}
+.spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 16px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Modal ─────────────────────────────────────────────────── */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(10,12,24,0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(3px);
-  padding: 20px;
-}
-.modal {
-  background: var(--surface);
-  border-radius: 18px;
-  width: 100%;
-  max-width: 460px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
-  animation: slideUp 0.2s ease;
-}
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 22px 24px 0;
-}
+.modal-overlay { position: fixed; inset: 0; background: rgba(10,12,24,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(3px); padding: 20px; }
+.modal { background: var(--surface); border-radius: 18px; width: 100%; max-width: 460px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); animation: slideUp 0.2s ease; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 22px 24px 0; }
 .modal-header h2 { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; }
 .close-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted); padding: 4px; }
 .modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
 .modal-footer { padding: 0 24px 22px; display: flex; justify-content: flex-end; gap: 10px; }
-
 .confirm-modal { padding: 28px 24px; text-align: center; }
 .confirm-modal h2 { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; margin-bottom: 12px; }
 .confirm-modal p { color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
 .confirm-modal .modal-footer { padding: 0; justify-content: center; }
 
-/* ── Form ──────────────────────────────────────────────────── */
 .form-group { display: flex; flex-direction: column; gap: 6px; }
 .form-group label { font-size: 13px; font-weight: 600; color: var(--muted); }
 .required { color: var(--danger); }
-.form-group input,
-.form-group textarea {
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  font-family: inherit;
-  font-size: 14px;
-  padding: 10px 13px;
-  outline: none;
-  color: var(--text);
-  transition: border-color 0.2s;
-  resize: vertical;
-}
-.form-group input:focus,
-.form-group textarea:focus { border-color: var(--primary); }
+.form-group input, .form-group textarea { border: 1.5px solid var(--border); border-radius: 10px; font-family: inherit; font-size: 14px; padding: 10px 13px; outline: none; color: var(--text); transition: border-color 0.2s; resize: vertical; }
+.form-group input:focus, .form-group textarea:focus { border-color: var(--primary); }
 .form-group input.error { border-color: var(--danger); }
 .err-msg { font-size: 12px; color: var(--danger); }
 
-/* ── Toast ─────────────────────────────────────────────────── */
-.toast {
-  position: fixed;
-  bottom: 28px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 12px 24px;
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 14px;
-  z-index: 2000;
-  animation: fadeInUp 0.25s ease;
-  white-space: nowrap;
-}
+.toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 10px; font-weight: 600; font-size: 14px; z-index: 2000; animation: fadeInUp 0.25s ease; white-space: nowrap; }
 .toast.success { background: var(--success); color: #fff; }
 .toast.error   { background: var(--danger);  color: #fff; }
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translate(-50%, 10px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
-}
+@keyframes fadeInUp { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
-/* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .contact-grid { grid-template-columns: 1fr; }
   .header-inner { padding: 14px 16px; }
   .main, .search-bar-wrap { padding: 0 16px; }
+  .pagination { gap: 4px; }
+  .page-btn { min-width: 32px; height: 32px; font-size: 13px; }
 }
 </style>
