@@ -1,45 +1,148 @@
-📱 **Professional Phonebook Application**
-A robust, full-stack contact management system engineered for high performance and reliability. This project demonstrates a modern microservices architecture, utilizing containerization to ensure seamless deployment and data persistence .  
+# 📒 Phonebook Application
 
+A full-stack contact management system built with **FastAPI** (Python), **Vue 3**, and **PostgreSQL**, containerized with **Docker Compose**.
 
-## 🎥 Video Demonstration (5-Minute Technical Walkthrough)
-> **[Watch the full video walkthrough here](https://youtu.be/y703RQKXtf4?si=mZYoKs6Z3rpviJSF)** — 
-*Includes UI demo, frontend logic, backend API explanation, and Docker setup.*
+---
 
+## 🛠 Tech Stack
 
-🖼️ **User Interface**
-The modern, responsive interface allows for seamless contact management across all devices.
-[Final UserInterface Screenshot](<Phonebook UI.jpeg>)
+| Layer       | Technology                          |
+|-------------|-------------------------------------|
+| Frontend    | Vue 3 (Composition API) + Vite      |
+| Backend     | FastAPI (Python 3.11) + SQLAlchemy  |
+| Database    | PostgreSQL 15                       |
+| Containers  | Docker + Docker Compose             |
+| HTTP Client | Axios                               |
 
-🛠 **Tech Stack**
-The application is built using a modern, scalable technology stack:Frontend: Vue 3 (Composition API) with Vite for a fast, reactive user interface.  Backend: FastAPI (Python) for asynchronous, high-concurrency RESTful API endpoints.  Database: PostgreSQL 15 for reliable, relational data storage.  Communication: Axios for standardized HTTP requests between the frontend and backend.  Orchestration: Docker & Docker Compose for full-system containerization and networking.  
+---
 
+## 🚀 Quick Start
 
-🚀 **Deployment and Installation**
-Follow these steps to deploy the application in any environment:
-1. PrerequisitesEnsure Docker Desktop is installed and running on your system. This eliminates the need to install local versions of Python or PostgreSQL.  
-2. System InitializationOpen your terminal in the project root directory and execute the following command:Bashdocker-compose up --build
+### Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
 
-This command automatically builds the images, configures the internal network, and initializes the database schema.  
+### Run with Docker Compose
 
-💻 **How to Use the Application**
-Once the containers are active, you can interact with the system through the following access points:Accessing the Web InterfaceNavigate to **http://localhost:8080** in your web browser.
+```bash
+# Clone the repository
+git clone https://github.com/jainaidu866/Phonebook-Application.git
+cd Phonebook-Application
 
-**Adding Contacts**: Use the input header to enter a name and phone number. Click "Add Contact" to commit the entry to the PostgreSQL database.  
-**Viewing Contacts**: The contact list automatically synchronizes with the database and displays all stored records in the data table.  Editing/Updating: Click the "Edit" button to modify existing contact details via a secure modal.  
-**Managing Data**: Each record includes a "Delete" option to permanently remove the entry from the system.  Interactive API DocumentationNavigate to http://localhost:8000/docs to access the Swagger UI. This provides a live environment to test all backend endpoints (GET, POST, PUT, DELETE) directly against the database.  
+# Start all services
+docker-compose up --build
+```
 
-🧪 **Testing the Application**
-To verify the system functionality as per requirements:  Automated Validation: Attempt to add a contact with an invalid phone format; the system will trigger a validation error.  
-API Testing: Use the Swagger UI at the link above to execute test cases for each RESTful endpoint.Persistence Test: Stop the containers and restart them; verify that previously added contacts remain available in the list.
+Once running, open:
+- **Frontend**: http://localhost:8080
+- **Backend API Docs (Swagger)**: http://localhost:8000/docs
 
-📁 **Project Architecture**
+---
 
-/**backend**: Contains the FastAPI logic, SQLAlchemy ORM models, and database connection strings.  
+## 🌱 Seed 50 Sample Contacts
 
-/**frontend**: Contains the Vue 3 source code, including the reactive App.vue component and Vite configuration.  
+After the app is running, in a separate terminal:
 
-**docker-compose.yml**: The central configuration file that manages service dependencies and environment variables.  
+```bash
+cd backend
+pip install requests        # if not already installed
+python seed_contacts.py     # seeds to http://localhost:8000 by default
 
-🛡️ **Key Features Data Persistence:** 
-Contacts remain securely stored in the PostgreSQL volume even after the application is shut down.Input Validation: The system enforces requirements for mandatory fields and specific phone formats to ensure data quality.  Containerized Networking: The frontend communicates securely with the backend via a dedicated Docker bridge network.  
+# Or specify a custom API URL:
+python seed_contacts.py --url http://localhost:8000
+```
+
+---
+
+## 📡 API Endpoints
+
+| Method | Endpoint           | Description                          |
+|--------|--------------------|--------------------------------------|
+| GET    | `/contacts`        | List all contacts (supports `?search=`) |
+| POST   | `/contacts`        | Create a new contact                 |
+| GET    | `/contacts/{id}`   | Get a contact by ID                  |
+| PUT    | `/contacts/{id}`   | Update a contact by ID               |
+| DELETE | `/contacts/{id}`   | Delete a contact by ID               |
+| GET    | `/health`          | Health check                         |
+| GET    | `/docs`            | Interactive Swagger UI               |
+
+### Example: Create a Contact
+
+```bash
+curl -X POST http://localhost:8000/contacts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Jane Doe",
+    "phone_number": "+1234567890",
+    "email": "jane@example.com",
+    "address": "123 Main St, Mumbai"
+  }'
+```
+
+### Example: Search Contacts
+
+```bash
+curl "http://localhost:8000/contacts?search=jane"
+```
+
+---
+
+## 🗄 Database Schema
+
+```sql
+contacts (
+  id           SERIAL PRIMARY KEY,
+  name         VARCHAR(255) NOT NULL,
+  phone_number VARCHAR(50)  UNIQUE NOT NULL,
+  email        VARCHAR(255) UNIQUE,
+  address      TEXT,
+  created_at   TIMESTAMP DEFAULT NOW()
+)
+```
+
+---
+
+## 🧪 Test with Postman / cURL
+
+Import the Swagger spec from `http://localhost:8000/openapi.json` into Postman, or use the interactive docs at `/docs`.
+
+---
+
+## 📁 Project Structure
+
+```
+Phonebook-Application/
+├── backend/
+│   ├── main.py              # FastAPI app, models, routes
+│   ├── requirements.txt
+│   ├── seed_contacts.py     # Script to add 50 sample contacts
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── App.vue          # Main Vue component
+│   │   └── main.js
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── .env
+│   └── Dockerfile
+├── docker-compose.yml
+└── README.md
+```
+
+---
+
+## ⚙️ Environment Variables
+
+| Variable       | Default Value                                              | Description          |
+|----------------|------------------------------------------------------------|----------------------|
+| `DATABASE_URL` | `postgresql://phonebook_user:phonebook_pass@db:5432/phonebook_db` | Postgres connection  |
+| `VITE_API_URL` | `http://localhost:8000`                                    | Backend API base URL |
+
+---
+
+## 🛑 Stopping the App
+
+```bash
+docker-compose down          # stop containers
+docker-compose down -v       # stop containers + delete database volume
+```
